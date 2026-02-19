@@ -110,7 +110,7 @@ def build_combined_dataframe(directory):
             'engine': 'vectorwise' if eng == 'v' else 'hyper',
             'threads': int(threads),
             'query_label': query_label,
-            'time_seconds': execution_time
+            'time': execution_time
         }
         row.update(perf_data)
         rows.append(row)
@@ -122,16 +122,34 @@ if __name__ == "__main__":
     parser.add_argument("dir", type=str, help="Directory containing .csv and .data files.")
     parser.add_argument("-o", "--output", type=str, default="combined_results.csv", 
                         help="Output filename (default: combined_results.csv)")
+    # New append flag
+    parser.add_argument("-a", "--append", action="store_true", 
+                        help="Append to the output CSV if it already exists.")
     
     args = parser.parse_args()
+    output_path = Path(args.output)
     
     print(f"Parsing data for machine: {Path(args.dir).resolve().name}")
-    df = build_combined_dataframe(args.dir)
+    new_df = build_combined_dataframe(args.dir)
     
-    if not df.empty:
-        # Sort by machine first, then query/threads
-        df = df.sort_values(by=['machine', 'query', 'threads', 'repetition'])
-        df.to_csv(args.output, index=False)
-        print(f"Success! {len(df)} rows written to {args.output}")
+    if not new_df.empty:
+        # Check if we should append to an existing file
+        if args.append and output_path.exists():
+            print(f"Appending to existing file: {output_path}")
+            try:
+                existing_df = pd.read_csv(output_path)
+                # Concat handles missing columns gracefully if metrics differ between runs
+                final_df = pd.concat([existing_df, new_df], ignore_index=True)
+            except pd.errors.EmptyDataError:
+                # Fallback if the existing file is completely empty
+                final_df = new_df
+        else:
+            final_df = new_df
+
+        # Ensure the final output remains cleanly sorted
+        final_df = final_df.sort_values(by=['machine', 'query', 'threads', 'repetition'])
+        
+        final_df.to_csv(output_path, index=False)
+        print(f"Success! Exported {len(new_df)} new rows. Total rows in file: {len(final_df)}")
     else:
         print("No valid file pairs found.")
