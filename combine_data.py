@@ -52,6 +52,57 @@ def parse_perf_semicolon_format(file_path):
         print(f"Error reading {file_path}: {e}")
     return metrics
 
+def parse_perf_stats_format(file_path):
+    """
+    Parses a standard perf stats output file into a dictionary of metrics.
+
+
+    Reads a file containing hardware counters and time elapsed metrics, ignoring headers and extracting numeric values. Commas in numbers are removed, and time metrics are normalized to include '_seconds' in their names.
+
+    params :
+
+    file_path - STR The path to the .stats file to be parsed.
+
+    returns :
+
+    metrics - DICT A dictionary mapping metric names to float values.
+
+    """
+    metrics = {}
+    try:
+        with open(file_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                #print(line, end="")
+                # Skip empty lines, comments, and headers
+                if not line or line.startswith('#') or line.startswith('Performance'):
+                    continue
+
+                parts = line.split()
+                if len(parts) >= 2:
+                    #print(f": parts ({parts})",end="")
+                    # Remove commas from the numeric value string
+                    val_str = parts[0].replace(',', '')
+                    try:
+                        val = float(val_str)
+                        if parts[1] == 'seconds':
+                            #print(": Skipping")
+                            continue
+                            metric_name = "_".join(parts[2:]) + "_seconds"
+                        else:
+                            metric_name = parts[1]
+
+                        #print(f":setting {metric_name}:{val}")
+                        metrics[metric_name] = val
+                    except ValueError:
+                        # If the first string is not a number, skip the line safely
+                        #print(": Skipping")
+                        continue
+    except Exception as e:
+        print(f"Error reading {file_path}: {e}")
+    return metrics
+
+
 def build_combined_dataframe(directory):
     """
     Combines CSV execution times and perf metrics, including machine name from the folder.
@@ -101,6 +152,16 @@ def build_combined_dataframe(directory):
         perf_file = base_path / f"{csv_file.stem}.data"
         perf_data = parse_perf_semicolon_format(perf_file) if perf_file.exists() else {}
 
+        # Parse corresponding .stats file
+        stats_file = base_path / f"{csv_file.stem}.stats"
+        stats_data = parse_perf_stats_format(stats_file) if stats_file.exists() else {}
+        try:
+            est = stats_data["LLC-misses"] / stats_data["cycle_activity.stalls_l3_miss"]
+            #print(f'{stats_data["LLC-misses"]} / {stats_data["cycle_activity.stalls_l3_miss"]}=\n\t\t{est}')
+        except KeyError:
+            print(f"empty/broken file: {csv_file}")
+            est = -1 
+
         # Consolidate row data
         row = {
             'machine': machine_name,
@@ -113,6 +174,7 @@ def build_combined_dataframe(directory):
             'time_seconds': execution_time
         }
         row.update(perf_data)
+        row.update(stats_data)
         rows.append(row)
         
     return pd.DataFrame(rows)
