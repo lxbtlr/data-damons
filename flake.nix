@@ -33,6 +33,7 @@
                 matplotlib
               ]))
               #clblas
+              bat
               virtualenv
               md2pdf
               gcc
