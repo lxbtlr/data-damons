@@ -119,6 +119,7 @@ class ExperimentConfig:
     reps: int
     mreps: int
     enable_textme: bool = True
+    pre_script_cmd: str = ""
 
     def __str__(self) -> str:
         """
@@ -191,7 +192,14 @@ def generate_benchmark_script(machine: MachineProfile, experiment: ExperimentCon
 #SBATCH --exclusive
 
 set -e
+
+# ========================================
+# PRE-SCRIPT / ENVIRONMENT SETUP
+# ========================================
 cd $HOME
+
+{experiment.pre_script_cmd}
+
 machine="{machine.name}"
 
 EXPERIMENT_NAME="{experiment.name}"
@@ -278,14 +286,15 @@ for (( rep=0; rep<$mreps; rep++ )); do
                 PREFIX=""
                 
                 for vs in "${{vectorsizes[@]}}"; do
+                    #echo -e 'about to run: '"${{PREFIX}}"' '"${{PERF}}"' '"${{RESULTS_DIR}}/r${{rep}}_${{query}}v_t${{thread}}.data"' ./run_tpch_'"${{compiler}}"' -q '"${{query}}"' -p '"${{DATA_DIR}}"' -r '"${{REPS}}"' -t '"${{thread}}"' -e "v" -v '"${{vs}}"' > '"${{RESULTS_DIR}}/r${{rep}}_${{query}}v_t${{thread}}"'".csv"'
+
                     # Run V
-                    echo -e 'about to run: '"${{PREFIX}}"' '"${{PERF}}"' '"${{RESULTS_DIR}}/r${{rep}}_${{query}}v_t${{thread}}.data"' ./run_tpch_'"${{compiler}}"' -q '"${{query}}"' -p '"${{DATA_DIR}}"' -r '"${{REPS}}"' -t '"${{thread}}"' -e "v" -v '"${{vs}}"' > '"${{RESULTS_DIR}}/r${{rep}}_${{query}}v_t${{thread}}"'".csv"'
-                    if ! $PREFIX $PERF "$RESULTS_DIR/r${{rep}}_${{query}}v_t${{thread}}.data" ./run_tpch_$compiler -q $query -p $DATA_DIR -r $REPS -t $thread -e "v" -v $vs > "$RESULTS_DIR/r${{rep}}_${{query}}v_t${{thread}}.csv"; then
+                    if ! $PREFIX $PERF "$RESULTS_DIR/r${{rep}}_${{query}}v_t${{thread}}.data" ./run_tpch_$compiler -q $query -p $DATA_DIR -r $REPS -t $thread -e "v" -v $vs > "$RESULTS_DIR/r${{rep}}_${{query}}v_t${{thread}}_${{vs}}.csv"; then
                         echo "FAILED: Q${{query}} SF=${{SCALE_FACTOR}} T=${{thread}} V=${{vs}}" >> failures.log
                     fi
 
                     # Run H
-                    if ! $PREFIX $PERF "$RESULTS_DIR/r${{rep}}_${{query}}h_t${{thread}}.data" ./run_tpch_$compiler -q $query -p $DATA_DIR -r $REPS -t $thread -e "h" -v $vs > "$RESULTS_DIR/r${{rep}}_${{query}}h_t${{thread}}.csv"; then
+                    if ! $PREFIX $PERF "$RESULTS_DIR/r${{rep}}_${{query}}h_t${{thread}}.data" ./run_tpch_$compiler -q $query -p $DATA_DIR -r $REPS -t $thread -e "h" -v $vs > "$RESULTS_DIR/r${{rep}}_${{query}}h_t${{thread}}_${{vs}}.csv"; then
                         echo "FAILED: Q${{query}} SF=${{SCALE_FACTOR}} T=${{thread}} V=${{vs}}" >> failures.log
                     fi
                 done
